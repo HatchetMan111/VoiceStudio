@@ -449,12 +449,15 @@ if ssh_guest "test -f /opt/${APP}/docker-compose.yml" >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# Gast: Docker + Compose-Plugin (Debian-Pakete, kein Fremd-Script)
+# Gast: Docker + Compose v2 (Docker aus Debian, Compose als offizielles Binary:
+# docker-compose-plugin existiert in Trixie-Main nicht -> apt bricht sonst alles ab)
 # ---------------------------------------------------------------------------
-msg_info "Installiere Docker im Gast (apt, idempotent) ..."
+msg_info "Installiere Docker + Compose v2 im Gast (apt + offizielles Binary, idempotent) ..."
 ssh_guest "for i in \$(seq 1 30); do fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || break; sleep 10; done"
-ssh_guest "export DEBIAN_FRONTEND=noninteractive && apt-get update -qq && apt-get install -y -qq ca-certificates curl qemu-guest-agent docker.io docker-compose-plugin && systemctl enable --now qemu-guest-agent docker"
-msg_ok "Docker bereit: $(ssh_guest 'docker --version' 2>/dev/null || echo unbekannt)"
+ssh_guest "export DEBIAN_FRONTEND=noninteractive && apt-get update -qq && apt-get install -y -qq ca-certificates curl qemu-guest-agent docker.io && systemctl enable --now qemu-guest-agent docker"
+ssh_guest "mkdir -p /usr/local/lib/docker/cli-plugins /usr/libexec/docker/cli-plugins && curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose && ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/libexec/docker/cli-plugins/docker-compose"
+ssh_guest "docker --version && docker compose version"
+msg_ok "Docker + Compose bereit."
 
 # ---------------------------------------------------------------------------
 # Gast: /opt/voicestudio (compose + .env + systemd-Unit)

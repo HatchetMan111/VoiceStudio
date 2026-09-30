@@ -46,7 +46,8 @@ Das Skript (`set -euo pipefail`, idempotent):
    Debian-13-Cloud-Image einmalig nach `/var/tmp` (SHA512-Prüfung wenn möglich),
 2. erstellt die VM `voicestudio` (`onboot: 1`, qemu-guest-agent, cloud-init,
    DHCP, SSH-Key-Login), startet sie und ermittelt die Gast-IP,
-3. installiert im Gast Docker + Compose-Plugin (Debian-Pakete), legt
+3. installiert im Gast Docker (`docker.io` aus Debian) + Compose v2
+   (offizielles Binary, da `docker-compose-plugin` in Trixie-Main fehlt), legt
    `/opt/voicestudio/` (`docker-compose.yml` + `.env` mit zufälligem
    `OMNIVOICE_API_KEY`) an, schreibt die systemd-Unit,
    `systemctl enable --now voicestudio`,
