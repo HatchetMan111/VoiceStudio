@@ -340,16 +340,20 @@ fi
 # SSH-Helfer (Gast-Kommandos; Exit-Codes + stdout/stderr bleiben erhalten)
 # ---------------------------------------------------------------------------
 GUEST_IP=""
-msg_info "Warte auf qemu-guest-agent ..."
-for _ in $(seq 1 24); do
-  if qm guest cmd "$VMID" ping >/dev/null 2>&1; then break; fi
+AGENT_UP="0"
+msg_info "Prüfe qemu-guest-agent (optional, 60 s) ..."
+for _ in $(seq 1 12); do
+  if qm guest cmd "$VMID" ping >/dev/null 2>&1; then AGENT_UP="1"; break; fi
   sleep 5
 done
-qm guest cmd "$VMID" ping >/dev/null 2>&1 || { msg_error "Guest-Agent antwortet nicht (qm guest cmd ping fehlgeschlagen)."; exit 1; }
+if [[ "$AGENT_UP" == "1" ]]; then
+  msg_ok "Guest-Agent antwortet."
+else
+  msg_warn "Guest-Agent antwortet nicht (Debian-Cloud-Images bringen ihn teils nicht mit) – fahre ohne Agent fort, IP per ARP."
+fi
 
-msg_info "Ermittle Gast-IP (DHCP, bis ~5 Min) ..."
-for _ in $(seq 1 60); do
-  GUEST_IP="$(qm guest cmd "$VMID" network-get-interfaces 2>/dev/null | python3 -c '
+resolve_ip_via_agent() {
+  qm guest cmd "$VMID" network-get-interfaces 2>/dev/null | python3 -c '
 import json,sys
 try:
   data = json.load(sys.stdin)
@@ -363,12 +367,30 @@ for iface in data if isinstance(data, list) else []:
     if addr.get("ip-address-type") == "ipv4" and not ip.startswith("127."):
       print(ip)
       sys.exit(0)
-' || true)"
+' || true
+}
+
+resolve_ip_via_arp() {
+  local mac ip
+  mac="$(qm config "$VMID" 2>/dev/null | grep -E '^net0:' | grep -oE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | head -1 | tr '[:upper:]' '[:lower:]')"
+  [[ -z "$mac" ]] && return 0
+  ip="$(ip -4 neigh show dev "$BRIDGE" 2>/dev/null | grep -i "$mac" | grep -v FAILED | awk '{print $1}' | head -1)"
+  [[ -n "$ip" ]] && echo "$ip"
+}
+
+msg_info "Ermittle Gast-IP (Agent, sonst ARP über $BRIDGE, bis ~5 Min) ..."
+for _ in $(seq 1 60); do
+  if [[ "$AGENT_UP" == "1" ]]; then
+    GUEST_IP="$(resolve_ip_via_agent)"
+  fi
+  if [[ -z "$GUEST_IP" ]]; then
+    GUEST_IP="$(resolve_ip_via_arp)"
+  fi
   if [[ -n "$GUEST_IP" ]]; then break; fi
   sleep 5
 done
 if [[ -z "$GUEST_IP" ]]; then
-  msg_error "Keine Gast-IP via Guest-Agent gefunden (DHCP prüfen: qm config $VMID | grep ipconfig)."
+  msg_error "Keine Gast-IP gefunden (weder Agent noch ARP auf $BRIDGE). DHCP prüfen: qm config $VMID | grep ipconfig; ip neigh show dev $BRIDGE"
   exit 1
 fi
 msg_ok "Gast-IP: $GUEST_IP"
@@ -397,7 +419,8 @@ fi
 # Gast: Docker + Compose-Plugin (Debian-Pakete, kein Fremd-Script)
 # ---------------------------------------------------------------------------
 msg_info "Installiere Docker im Gast (apt, idempotent) ..."
-ssh_guest "export DEBIAN_FRONTEND=noninteractive && apt-get update -qq && apt-get install -y -qq ca-certificates curl docker.io docker-compose-plugin && systemctl enable --now docker"
+ssh_guest "for i in \$(seq 1 30); do fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || break; sleep 10; done"
+ssh_guest "export DEBIAN_FRONTEND=noninteractive && apt-get update -qq && apt-get install -y -qq ca-certificates curl qemu-guest-agent docker.io docker-compose-plugin && systemctl enable --now qemu-guest-agent docker"
 msg_ok "Docker bereit: $(ssh_guest 'docker --version' 2>/dev/null || echo unbekannt)"
 
 # ---------------------------------------------------------------------------
