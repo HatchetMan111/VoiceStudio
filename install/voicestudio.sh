@@ -323,10 +323,10 @@ fi
 GUEST_IP=""
 msg_info "Warte auf qemu-guest-agent ..."
 for _ in $(seq 1 24); do
-  if qm guest ping "$VMID" >/dev/null 2>&1; then break; fi
+  if qm guest cmd "$VMID" ping >/dev/null 2>&1; then break; fi
   sleep 5
 done
-qm guest ping "$VMID" >/dev/null 2>&1 || { msg_error "Guest-Agent antwortet nicht (qm guest ping fehlgeschlagen)."; exit 1; }
+qm guest cmd "$VMID" ping >/dev/null 2>&1 || { msg_error "Guest-Agent antwortet nicht (qm guest cmd ping fehlgeschlagen)."; exit 1; }
 
 msg_info "Ermittle Gast-IP (DHCP, bis ~5 Min) ..."
 for _ in $(seq 1 60); do
