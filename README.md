@@ -69,11 +69,13 @@ Erwartete Schlussausgabe (Beispiel):
   ...
 ```
 
-Hinweis Loopback-Default: Port 3900 ist per Default nur im Gast auf
-`127.0.0.1` gebunden. UI entweder per `--lan`-Re-Run freigeben
-(`bash voicestudio.sh --vmid 100 --lan`, API-Key im UI eingeben) oder per
-SSH-Tunnel öffnen: `ssh -L 3900:127.0.0.1:3900 root@<VM-IP>`, dann
-`http://localhost:3900`.
+Hinweis LAN-Default: Port 3900 ist per Default im LAN erreichbar
+(`0.0.0.0`, `http://<VM-IP>:3900`) — der API-Key (in `/opt/voicestudio/.env`
+auf der VM) schützt Admin-Funktionen, bitte lang + geheim halten und die VM
+nicht unverschlüsselt ins Internet stellen. Wer Loopback will:
+`bash voicestudio.sh --vmid <ID> --loopback-only` (Zugriff dann per
+SSH-Tunnel: `ssh -L 3900:127.0.0.1:3900 root@<VM-IP>`, dann
+`http://localhost:3900`).
 
 ## 2. Reboot-Test (Reboot-sicher belegen)
 

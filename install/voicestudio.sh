@@ -44,7 +44,7 @@ PASSWORD_ARG="${PASSWORD:-}"
 SSH_KEY_ARG="${SSH_KEY:-}"
 API_KEY_ARG="${API_KEY:-}"
 GPU_PROFILE_ARG="${GPU_PROFILE:-cpu}"
-LAN_ARG="${LAN:-0}"
+LAN_ARG="${LAN:-1}"
 DEBUG_ARG="${DEBUG:-0}"
 
 LOG_FILE="/tmp/voicestudio-install-$(date +%Y%m%d-%H%M%S).log"
@@ -82,7 +82,8 @@ Optionen:
   --api-key KEY        VoiceStudio API-Key (Default: zufällig generiert, bleibt bei Re-Run erhalten)
   --gpu-profile PROF   cpu|nvidia|rocm (Default: cpu; nvidia/rocm prüft nur + warnt, PCI-Passthrough bleibt manuell)
   --guest-ip IP        Gast-IPv4 direkt vorgeben (überspringt Agent-/ARP-/Sweep-Suche, z. B. aus FritzBox abgelesen)
-  --lan                Port 3900 zusätzlich im LAN freigeben (0.0.0.0 statt 127.0.0.1, nur mit API-Key)
+  --lan                Port 3900 im LAN freigeben (Default: an, 0.0.0.0 – nur mit API-Key nutzen)
+  --loopback-only      Port 3900 nur im Gast binden (127.0.0.1, Zugriff per SSH-Tunnel)
   --debug, -x          set -x + maximale Fehlermeldungskette
   --help, -h           diese Hilfe
 
@@ -173,6 +174,7 @@ while [[ $# -gt 0 ]]; do
     --gpu-profile) GPU_PROFILE="${2:?}"; shift 2 ;;
     --guest-ip)    GUEST_IP_OVERRIDE="${2:?--guest-ip braucht eine IPv4}"; shift 2 ;;
     --lan)         LAN="1"; shift ;;
+    --loopback-only) LAN="0"; shift ;;
     --debug|-x)    DEBUG="1"; set -x; shift ;;
     --help|-h)     usage; exit 0 ;;
     *) msg_error "Unbekannte Option: $1"; usage; exit 1 ;;
