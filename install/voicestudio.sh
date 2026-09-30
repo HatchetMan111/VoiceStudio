@@ -81,6 +81,7 @@ Optionen:
   --ssh-key PATH       zusätzlicher SSH Public Key für die VM (optional)
   --api-key KEY        VoiceStudio API-Key (Default: zufällig generiert, bleibt bei Re-Run erhalten)
   --gpu-profile PROF   cpu|nvidia|rocm (Default: cpu; nvidia/rocm prüft nur + warnt, PCI-Passthrough bleibt manuell)
+  --guest-ip IP        Gast-IPv4 direkt vorgeben (überspringt Agent-/ARP-/Sweep-Suche, z. B. aus FritzBox abgelesen)
   --lan                Port 3900 zusätzlich im LAN freigeben (0.0.0.0 statt 127.0.0.1, nur mit API-Key)
   --debug, -x          set -x + maximale Fehlermeldungskette
   --help, -h           diese Hilfe
@@ -155,6 +156,7 @@ EXTRA_SSH_KEY="$SSH_KEY_ARG"
 API_KEY="$API_KEY_ARG"
 GPU_PROFILE="$GPU_PROFILE_ARG"
 LAN="$LAN_ARG"
+GUEST_IP_OVERRIDE="${GUEST_IP:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -169,6 +171,7 @@ while [[ $# -gt 0 ]]; do
     --ssh-key)     EXTRA_SSH_KEY="${2:?}"; shift 2 ;;
     --api-key)     API_KEY="${2:?}"; shift 2 ;;
     --gpu-profile) GPU_PROFILE="${2:?}"; shift 2 ;;
+    --guest-ip)    GUEST_IP_OVERRIDE="${2:?--guest-ip braucht eine IPv4}"; shift 2 ;;
     --lan)         LAN="1"; shift ;;
     --debug|-x)    DEBUG="1"; set -x; shift ;;
     --help|-h)     usage; exit 0 ;;
@@ -380,19 +383,47 @@ resolve_ip_via_arp() {
   return 0
 }
 
-msg_info "Ermittle Gast-IP (Agent, sonst ARP über $BRIDGE, bis ~5 Min) ..."
-for _ in $(seq 1 60); do
-  if [[ "$AGENT_UP" == "1" ]]; then
-    GUEST_IP="$(resolve_ip_via_agent)"
+# Aktiver Sweep: stiller Gast -> keine ARP-Einträge -> passives Warten findet nie etwas.
+# Ping-Sweep über das /24 der Bridge füllt die ARP-Tabelle neu (einmalig + alle ~2 Min).
+sweep_subnet_once() {
+  local cidr net i
+  cidr="$(ip -4 -o addr show dev "$BRIDGE" 2>/dev/null | awk '{print $4}' | head -1)"
+  case "$cidr" in
+    */24) ;;
+    *) msg_warn "Sweep übersprungen (Bridge $BRIDGE hat kein /24: ${cidr:-keine IPv4})."; return 0 ;;
+  esac
+  net="${cidr%.*}"
+  msg_info "Sweep $net.2-254 zum Füllen der ARP-Tabelle ..."
+  for i in $(seq 2 254); do ping -c1 -W1 "$net.$i" >/dev/null 2>&1 & done
+  wait || true
+}
+
+if [[ -n "${GUEST_IP_OVERRIDE:-}" ]]; then
+  if ! [[ "$GUEST_IP_OVERRIDE" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    msg_error "Ungültige --guest-ip: $GUEST_IP_OVERRIDE (IPv4 erwartet, z. B. 192.168.178.142)"
+    exit 1
   fi
-  if [[ -z "$GUEST_IP" ]]; then
-    GUEST_IP="$(resolve_ip_via_arp)"
-  fi
-  if [[ -n "$GUEST_IP" ]]; then break; fi
-  sleep 5
-done
+  GUEST_IP="$GUEST_IP_OVERRIDE"
+  msg_ok "Gast-IP vorgegeben (--guest-ip): $GUEST_IP"
+else
+  msg_info "Ermittle Gast-IP (Agent, sonst ARP/Sweep über $BRIDGE, bis ~6 Min) ..."
+  for i in $(seq 1 60); do
+    if [[ "$AGENT_UP" == "1" ]]; then
+      GUEST_IP="$(resolve_ip_via_agent)"
+    fi
+    if [[ -z "$GUEST_IP" ]]; then
+      GUEST_IP="$(resolve_ip_via_arp)"
+    fi
+    if [[ -z "$GUEST_IP" && $((i % 30)) == 1 ]]; then
+      sweep_subnet_once
+      GUEST_IP="$(resolve_ip_via_arp)"
+    fi
+    if [[ -n "$GUEST_IP" ]]; then break; fi
+    sleep 5
+  done
+fi
 if [[ -z "$GUEST_IP" ]]; then
-  msg_error "Keine Gast-IP gefunden (weder Agent noch ARP auf $BRIDGE). DHCP prüfen: qm config $VMID | grep ipconfig; ip neigh show dev $BRIDGE"
+  msg_error "Keine Gast-IP gefunden (weder Agent noch ARP/Sweep auf $BRIDGE). DHCP prüfen oder --guest-ip <IP> direkt übergeben."
   exit 1
 fi
 msg_ok "Gast-IP: $GUEST_IP"
