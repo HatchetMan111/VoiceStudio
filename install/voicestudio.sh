@@ -375,7 +375,9 @@ resolve_ip_via_arp() {
   mac="$(qm config "$VMID" 2>/dev/null | grep -E '^net0:' | grep -oE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' | head -1 | tr '[:upper:]' '[:lower:]')"
   [[ -z "$mac" ]] && return 0
   ip="$(ip -4 neigh show dev "$BRIDGE" 2>/dev/null | grep -i "$mac" | grep -v FAILED | awk '{print $1}' | head -1)"
-  [[ -n "$ip" ]] && echo "$ip"
+  # "Noch keine IP" ist kein Fehler (Polling) -> immer 0 zurück, sonst killt set -e die Schleife.
+  if [[ -n "$ip" ]]; then echo "$ip"; fi
+  return 0
 }
 
 msg_info "Ermittle Gast-IP (Agent, sonst ARP über $BRIDGE, bis ~5 Min) ..."
