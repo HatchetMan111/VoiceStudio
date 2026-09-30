@@ -585,7 +585,8 @@ echo "  App          : VoiceStudio – Open-Source Voice-Studio (Upstream: debpa
 echo "  VM           : $VMID (Hostname: $APP, onboot=1)"
 echo "  Ressourcen   : $CORES vCPU / $RAM MB RAM / $DISK GB Disk"
 echo "  Web UI       : $UI_URL"
-echo "  API-Key      : beim ersten UI-Aufruf eingeben (in /opt/$APP/.env auf der VM)"
+echo "  API-Key      : $API_KEY (nur jetzt angezeigt – sicher ablegen!)"
+echo "                 Im Browser die Web UI öffnen, bei der Schlüssel-Abfrage einkleben."
 if [[ "$ROOT_PW_GENERATED" == "1" && "$EXISTING" == "0" ]]; then
 echo "  Root-Passwort: $ROOT_PASSWORD (nur jetzt angezeigt – sicher ablegen!)"
 fi

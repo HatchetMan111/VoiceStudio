@@ -77,7 +77,22 @@ nicht unverschlüsselt ins Internet stellen. Wer Loopback will:
 SSH-Tunnel: `ssh -L 3900:127.0.0.1:3900 root@<VM-IP>`, dann
 `http://localhost:3900`).
 
-## 2. Reboot-Test (Reboot-sicher belegen)
+## 2. Erster Login (API-Key)
+
+Die Web UI fragt beim **ersten Aufruf im Browser** nach dem API-Key
+(`http://<VM-IP>:3900`) — einkleben, fertig (wird in eine Kurzzeit-Sitzung
+getauscht, der Master-Key bleibt geheim). Der Key steht:
+
+- in der Schluss-Box der Installation (einmalig angezeigt),
+- jederzeit auf der VM in `/opt/voicestudio/.env` (`OMNIVOICE_API_KEY=…`),
+- vom Host abrufbar ohne Re-Run:
+
+```bash
+ssh -i /root/.ssh/voicestudio_proxmox -o StrictHostKeyChecking=no root@<VM-IP> \
+  'grep ^OMNIVOICE_API_KEY= /opt/voicestudio/.env | cut -d= -f2'
+```
+
+## 3. Reboot-Test (Reboot-sicher belegen)
 
 ```bash
 VM=100; KEY=/root/.ssh/voicestudio_proxmox
@@ -89,20 +104,20 @@ for i in json.load(sys.stdin):
 qm config $VM | grep -i onboot   # muss: onboot: 1
 ```
 
-## 3. Update (idempotent – mit --vmid erneut laufen lassen)
+## 4. Update (idempotent – mit --vmid erneut laufen lassen)
 
 ```bash
 bash voicestudio.sh --vmid 100
 # aktualisiert Compose/Unit (Secrets bleiben), pull + restart, danach Verifikation
 ```
 
-## 4. Deinstallation
+## 5. Deinstallation
 
 ```bash
 qm stop 100 && qm destroy 100
 ```
 
-## 5. Debugging (komplette Fehlermeldungskette)
+## 6. Debugging (komplette Fehlermeldungskette)
 
 - Jeder Lauf loggt **stdout+stderr vollständig** nach `/tmp/voicestudio-install-<Datum>.log`.
 - Bei Fehlern druckt das Skript: Befehl, Zeile, Exit-Code, Stacktrace
