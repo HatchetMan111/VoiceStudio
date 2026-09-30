@@ -299,6 +299,7 @@ else
   qm create "$VMID" \
     --name "$APP" --ostype l26 \
     --memory "$RAM" --cores "$CORES" --cpu host \
+    --scsihw virtio-scsi-single \
     --net0 "virtio,bridge=$BRIDGE" \
     --scsi0 "$STORAGE:0,import-from=$IMG_CACHE,cache=writeback,discard=on" \
     --ide2 "$STORAGE:cloudinit" \
@@ -310,6 +311,24 @@ else
     --ipconfig0 ip=dhcp
   qm resize "$VMID" scsi0 "${DISK}G"
   msg_ok "VM $VMID erstellt."
+fi
+
+# SCSI-Controller normalisieren: lsi sieht die Cloud-Initramfs-Platte nicht
+# (kein "Attached scsi disk" -> Root-Mount-Stall). virtio-scsi-single heilt
+# Neu- und Bestands-VMs gleichermaßen; braucht einmalig einen Neustart.
+CURRENT_SCSIHW="$(qm config "$VMID" 2>/dev/null | awk '/^scsihw:/ {print $2}')"
+if [[ "${CURRENT_SCSIHW:-lsi}" != "virtio-scsi-single" ]]; then
+  msg_warn "SCSI-Controller ist ${CURRENT_SCSIHW:-lsi (Default)} – stelle auf virtio-scsi-single um ..."
+  if qm status "$VMID" 2>/dev/null | grep -q "status: running"; then
+    msg_info "Stoppe VM $VMID für Controller-Wechsel ..."
+    qm shutdown "$VMID" --timeout 60 >/dev/null 2>&1 || qm stop "$VMID" >/dev/null 2>&1 || true
+    for _ in $(seq 1 30); do
+      qm status "$VMID" 2>/dev/null | grep -q "status: stopped" && break
+      sleep 5
+    done
+  fi
+  qm set "$VMID" --scsihw virtio-scsi-single
+  msg_ok "SCSI-Controller: virtio-scsi-single."
 fi
 
 if ! qm status "$VMID" 2>/dev/null | grep -q "status: running"; then
