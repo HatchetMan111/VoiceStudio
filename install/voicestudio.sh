@@ -518,7 +518,7 @@ WorkingDirectory=/opt/voicestudio
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
 ExecReload=/usr/bin/docker compose pull
-TimeoutStartSec=300
+TimeoutStartSec=1800
 
 [Install]
 WantedBy=multi-user.target
@@ -545,9 +545,9 @@ fi
 # ---------------------------------------------------------------------------
 msg_info "Starte VoiceStudio (erster Start lädt Image + Modelle, dauert Minuten) ..."
 ssh_guest "systemctl restart ${APP}"
-msg_info "Warte auf HTTP 200 an localhost:${PORT}/health (bis ~4 Min) ..."
+msg_info "Warte auf HTTP 200 an localhost:${PORT}/health (Erststart: Image + Modelle, bis ~10 Min) ..."
 HEALTH_OK="0"
-for _ in $(seq 1 48); do
+for _ in $(seq 1 120); do
   if ssh_guest "curl -fs http://127.0.0.1:${PORT}/health >/dev/null 2>&1" >/dev/null 2>&1; then HEALTH_OK="1"; break; fi
   sleep 5
 done
