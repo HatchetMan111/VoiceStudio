@@ -1,0 +1,13 @@
+# ---> Secrets: niemals committen
+.env
+.env.*
+*.env
+/tmp/voicestudio-install-*.log
+omnivoice_data/
+*.key
+*.pem
+*token*
+*secret*
+__pycache__/
+.venv/
+node_modules/
